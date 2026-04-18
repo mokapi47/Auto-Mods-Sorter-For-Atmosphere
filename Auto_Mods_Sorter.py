@@ -1439,9 +1439,40 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    script_dir = Path(__file__).resolve().parent
-    root = Path(args.path).resolve() if args.path else script_dir
-    launch_dir = Path.cwd().resolve()
+
+    # Déterminer le répertoire de base pour les fichiers de configuration
+    # En mode standalone (Nuitka), utiliser le répertoire de l'exécutable
+    # En mode script normal, utiliser le répertoire du script
+    if getattr(sys, 'frozen', False):
+        # Mode exécutable standalone (Nuitka, PyInstaller, etc.)
+        exe_path = Path(sys.executable).resolve()
+        script_dir = exe_path.parent
+    else:
+        # Mode script Python normal
+        script_dir = Path(__file__).resolve().parent
+
+    # Pour le traitement, utiliser le répertoire de l'exécutable par défaut
+    # sauf si un chemin est explicitement spécifié
+    if args.path:
+        root = Path(args.path).resolve()
+    else:
+        # Par défaut, utiliser le répertoire de l'exécutable (script_dir)
+        # pour traiter les mods dans le même répertoire que l'exe
+        root = script_dir
+
+    launch_dir = root  # Utiliser le même répertoire pour les logs
+
+    # En mode frozen, changer le répertoire de travail courant vers le répertoire de l'exécutable
+    # pour éviter les problèmes avec Nuitka onefile qui utilise un répertoire temporaire
+    if getattr(sys, 'frozen', False):
+        try:
+            os.chdir(root)
+            if debug:
+                debug.log("MAIN", f"Répertoire de travail changé vers: '{root}'")
+        except OSError as exc:
+            if debug:
+                debug.log("MAIN", f"Impossible de changer le répertoire de travail: {exc}")
+
     configure_console_line_by_line()
     enable_windows_ansi()
     debug = DebugLogger(enabled=args.debug, output_dir=launch_dir)
